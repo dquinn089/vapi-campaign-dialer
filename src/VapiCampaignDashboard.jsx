@@ -905,20 +905,15 @@ export default function VapiCampaignDashboard() {
   const [showImport, setShowImport] = useState(false);
   const [vapiConfig, setVapiConfig] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("vapi_config") || "{}");
+      const saved = JSON.parse(localStorage.getItem("vapi_config_v2") || "{}");
       return {
-        apiKey: saved.apiKey || import.meta.env.VITE_VAPI_API_KEY || "",
-        assistantId: saved.assistantId || import.meta.env.VITE_VAPI_ASSISTANT_ID || "",
-        phoneNumberId: saved.phoneNumberId || import.meta.env.VITE_VAPI_PHONE_NUMBER_ID || "",
+        apiKey: saved.apiKey || "",
+        assistantId: saved.assistantId || "",
+        phoneNumberId: saved.phoneNumberId || "",
         delayBetweenCalls: saved.delayBetweenCalls ?? 5,
       };
     } catch {
-      return {
-        apiKey: import.meta.env.VITE_VAPI_API_KEY || "",
-        assistantId: import.meta.env.VITE_VAPI_ASSISTANT_ID || "",
-        phoneNumberId: import.meta.env.VITE_VAPI_PHONE_NUMBER_ID || "",
-        delayBetweenCalls: 5,
-      };
+      return { apiKey: "", assistantId: "", phoneNumberId: "", delayBetweenCalls: 5 };
     }
   });
   const [dbConfig, setDbConfig] = useState({
@@ -969,7 +964,7 @@ export default function VapiCampaignDashboard() {
   }, [businessName]);
 
   useEffect(() => {
-    localStorage.setItem("vapi_config", JSON.stringify(vapiConfig));
+    localStorage.setItem("vapi_config_v2", JSON.stringify(vapiConfig));
   }, [vapiConfig]);
 
   // Real mode = all three VAPI creds present
