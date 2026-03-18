@@ -1095,6 +1095,16 @@ export default function VapiCampaignDashboard() {
 
     const { vapiConfig: cfg, businessName: biz } = configRef.current;
 
+    // Normalize to E.164 format — VAPI requires +1XXXXXXXXXX for US numbers
+    const normalizePhone = (raw) => {
+      const digits = raw.replace(/\D/g, "");
+      if (raw.startsWith("+")) return raw;          // already E.164
+      if (digits.length === 10) return `+1${digits}`; // US 10-digit
+      if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`; // US with country code
+      return `+${digits}`;                           // best-effort
+    };
+    const e164Phone = normalizePhone(contact.phone);
+
     try {
       const resp = await fetch("https://api.vapi.ai/call/phone", {
         method: "POST",
@@ -1106,7 +1116,7 @@ export default function VapiCampaignDashboard() {
           assistantId: cfg.assistantId,
           phoneNumberId: cfg.phoneNumberId,
           customer: {
-            number: contact.phone,
+            number: e164Phone,
             ...(contact.name ? { name: contact.name } : {}),
           },
           assistantOverrides: {

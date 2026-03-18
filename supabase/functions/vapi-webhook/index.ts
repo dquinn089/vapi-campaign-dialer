@@ -117,13 +117,34 @@ Deno.serve(async (req) => {
       return Response.json({ success: true });
     }
 
-    // ─── STATUS UPDATES (in-progress → calling) ───
+    // ─── STATUS UPDATES ───
     if (message?.type === "status-update") {
       if (message.status === "in-progress") {
         await supabase
           .from("calls")
           .update({ status: "calling" })
           .eq("vapi_call_id", callId);
+      }
+
+      // Immediately advance the campaign as soon as VAPI detects call end —
+      // before the full end-of-call-report arrives (which can take 30+ sec).
+      if (message.status === "ended") {
+        const { data: existing } = await supabase
+          .from("calls")
+          .select("status")
+          .eq("vapi_call_id", callId)
+          .single();
+
+        const preserve = ["scheduled", "declined"].includes(existing?.status ?? "");
+        if (!preserve) {
+          await supabase
+            .from("calls")
+            .update({
+              status: determineStatus(message),
+              end_reason: message.endedReason ?? null,
+            })
+            .eq("vapi_call_id", callId);
+        }
       }
     }
 
@@ -148,10 +169,12 @@ function determineStatus(report: { endedReason?: string }): string {
   ) return "no_answer";
   if (
     r.includes("error") ||
-    r.includes("failed") ||
-    r.includes("provider") ||
-    r.includes("websocket")
+    r.includes("provider-error") ||
+    r.includes("websocket-error") ||
+    r.includes("transport-error")
   ) return "failed";
+  // Customer or assistant ended the call normally (includes "call-deleted" which
+  // happens when the delete API is called — treat as answered either way)
   return "answered";
 }
 
