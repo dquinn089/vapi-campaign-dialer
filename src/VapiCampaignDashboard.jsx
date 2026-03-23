@@ -936,6 +936,9 @@ export default function VapiCampaignDashboard() {
   const [showConfig, setShowConfig] = useState(false);
   const [configTab, setConfigTab] = useState("vapi");
   const [tab, setTab] = useState("setup");
+  const [campaignName, setCampaignName] = useState("");
+  const [countryCode, setCountryCode] = useState("+1");
+  const [phoneDigits, setPhoneDigits] = useState("");
 
   // Refs
   const timerRef = useRef(null);
@@ -998,6 +1001,56 @@ export default function VapiCampaignDashboard() {
     const newContacts = parsePhoneNumbers(phoneInput);
     setContacts((prev) => [...prev, ...newContacts]);
     setPhoneInput("");
+  };
+
+  const addSingleContact = () => {
+    const digits = phoneDigits.replace(/\D/g, "");
+    if (!digits) return;
+    const phone = `${countryCode}${digits}`;
+    setContacts((prev) => [...prev, { id: Date.now(), phone, name: "", status: CALL_STATES.PENDING, result: null }]);
+    setPhoneDigits("");
+  };
+
+  const loadCampaign = async (meta) => {
+    const { data, error } = await supabase
+      .from("calls")
+      .select("*")
+      .eq("campaign_id", meta.id)
+      .order("created_at", { ascending: true });
+    if (error || !data) { alert("Failed to load campaign."); return; }
+
+    const loaded = data.map((row, i) => ({
+      id: Date.now() + i,
+      phone: row.phone,
+      name: row.contact_name || "",
+      status: row.status,
+      supabaseId: row.id,
+      result: !["pending", "calling"].includes(row.status) ? mapRowToResult(row) : null,
+    }));
+
+    setContacts(loaded);
+    contactsRef.current = loaded;
+    setCampaignId(meta.id);
+    setCampaignName(meta.name || "");
+    setBusinessName(meta.businessName || "");
+    const allDone = loaded.every((c) => !["pending", "calling"].includes(c.status));
+    setCampaignState(allDone ? CAMPAIGN_STATES.COMPLETE : CAMPAIGN_STATES.IDLE);
+    campaignRef.current = allDone ? CAMPAIGN_STATES.COMPLETE : CAMPAIGN_STATES.IDLE;
+    setTab("results");
+    setupRealtime(meta.id);
+  };
+
+  const expandContact = async (contactId) => {
+    if (expandedRow === contactId) { setExpandedRow(null); return; }
+    setExpandedRow(contactId);
+    // Always fetch latest from Supabase so transcript/summary are up to date
+    const contact = contactsRef.current.find((c) => c.id === contactId);
+    if (contact?.supabaseId) {
+      const { data } = await supabase.from("calls").select("*").eq("id", contact.supabaseId).single();
+      if (data) {
+        setContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, result: mapRowToResult(data) } : c));
+      }
+    }
   };
 
   const removeContact = (id) => {
@@ -1290,6 +1343,17 @@ export default function VapiCampaignDashboard() {
   const startCampaignReal = async () => {
     const cid = crypto.randomUUID();
     setCampaignId(cid);
+
+    // Save to campaign history in localStorage
+    const entry = {
+      id: cid,
+      name: campaignName.trim() || `Campaign ${new Date().toLocaleDateString()}`,
+      businessName,
+      contactCount: contacts.length,
+      createdAt: new Date().toISOString(),
+    };
+    const prev = JSON.parse(localStorage.getItem("vapi_campaign_history") || "[]");
+    localStorage.setItem("vapi_campaign_history", JSON.stringify([entry, ...prev].slice(0, 50)));
 
     // Insert all contacts into Supabase
     const inserts = contacts.map((c) => ({
@@ -1595,6 +1659,7 @@ export default function VapiCampaignDashboard() {
             {[
               { key: "setup", label: "CAMPAIGN SETUP" },
               { key: "results", label: `RESULTS ${stats.called > 0 ? `(${stats.called})` : ""}` },
+              { key: "history", label: "HISTORY" },
             ].map((t) => (
               <button
                 key={t.key}
@@ -1617,6 +1682,25 @@ export default function VapiCampaignDashboard() {
           {/* ─── SETUP TAB ─── */}
           {tab === "setup" && (
             <div style={{ animation: "slideIn 0.2s ease" }}>
+              {/* Campaign Name */}
+              <div
+                style={{
+                  background: "#0f1124",
+                  border: "1px solid #1e2140",
+                  borderRadius: 12,
+                  padding: 20,
+                  marginBottom: 16,
+                }}
+              >
+                <label style={labelStyle}>Campaign Name</label>
+                <input
+                  placeholder={`e.g. March Leads, Q1 Outreach — ${new Date().toLocaleDateString()}`}
+                  value={campaignName}
+                  onChange={(e) => setCampaignName(e.target.value)}
+                  style={{ ...inputStyle, fontSize: 15, padding: "12px 16px" }}
+                />
+              </div>
+
               {/* Calling On Behalf Of */}
               <div
                 style={{
@@ -1658,21 +1742,54 @@ export default function VapiCampaignDashboard() {
                     ↑ Import from File
                   </button>
                 </div>
-                <textarea
-                  placeholder={`Enter phone numbers (one per line)\nOptionally add a name after a tab:\n+1 (555) 123-4567\t John Smith\n+1 (555) 987-6543\t Jane Doe`}
-                  value={phoneInput}
-                  onChange={(e) => setPhoneInput(e.target.value)}
-                  rows={6}
-                  style={{
-                    ...inputStyle,
-                    resize: "vertical",
-                    minHeight: 120,
-                    lineHeight: 1.6,
-                  }}
-                />
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
+                <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                  <select
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
+                    style={{ ...inputStyle, width: 130, padding: "10px 10px", flexShrink: 0 }}
+                  >
+                    {[
+                      ["+1",   "🇺🇸 +1 US/CA"],
+                      ["+44",  "🇬🇧 +44 UK"],
+                      ["+61",  "🇦🇺 +61 AU"],
+                      ["+64",  "🇳🇿 +64 NZ"],
+                      ["+27",  "🇿🇦 +27 ZA"],
+                      ["+49",  "🇩🇪 +49 DE"],
+                      ["+33",  "🇫🇷 +33 FR"],
+                      ["+34",  "🇪🇸 +34 ES"],
+                      ["+39",  "🇮🇹 +39 IT"],
+                      ["+31",  "🇳🇱 +31 NL"],
+                      ["+52",  "🇲🇽 +52 MX"],
+                      ["+55",  "🇧🇷 +55 BR"],
+                      ["+54",  "🇦🇷 +54 AR"],
+                      ["+91",  "🇮🇳 +91 IN"],
+                      ["+81",  "🇯🇵 +81 JP"],
+                      ["+82",  "🇰🇷 +82 KR"],
+                      ["+86",  "🇨🇳 +86 CN"],
+                      ["+971", "🇦🇪 +971 UAE"],
+                      ["+966", "🇸🇦 +966 SA"],
+                    ].map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="tel"
+                    placeholder="5551234567"
+                    value={phoneDigits}
+                    onChange={(e) => setPhoneDigits(e.target.value.replace(/[^\d]/g, ""))}
+                    onKeyDown={(e) => e.key === "Enter" && addSingleContact()}
+                    style={{ ...inputStyle, flex: 1, padding: "10px 14px" }}
+                  />
+                  <button
+                    onClick={addSingleContact}
+                    style={{ ...btnBase, padding: "10px 18px", background: "#1e2140", color: "#4ecdc4", border: "1px solid rgba(78,205,196,0.3)", borderRadius: 8, flexShrink: 0 }}
+                  >
+                    + Add
+                  </button>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
                   <p style={{ fontSize: 11, color: "#6b7094", margin: 0 }}>
-                    Paste numbers separated by new lines, commas, or semicolons.
+                    Select country code, type digits, press Enter or Add. Use Import for bulk.
                   </p>
                   <button
                     onClick={addContacts}
@@ -2016,7 +2133,7 @@ export default function VapiCampaignDashboard() {
                       <div key={c.id}>
                         <div
                           onClick={() =>
-                            c.result && setExpandedRow(expandedRow === c.id ? null : c.id)
+                            c.result && expandContact(c.id)
                           }
                           style={{
                             display: "grid",
@@ -2136,8 +2253,8 @@ export default function VapiCampaignDashboard() {
                                 <label style={{ ...labelStyle, fontSize: 9, color: "#4ecdc4", marginBottom: 6 }}>
                                   AI Summary
                                 </label>
-                                <p style={{ fontSize: 12, color: "#9ca0b8", margin: 0, lineHeight: 1.6, fontFamily: "'Outfit', sans-serif" }}>
-                                  {c.result.summary}
+                                <p style={{ fontSize: 12, color: c.result.summary ? "#9ca0b8" : "#3a3d5c", margin: 0, lineHeight: 1.6, fontFamily: "'Outfit', sans-serif", fontStyle: c.result.summary ? "normal" : "italic" }}>
+                                  {c.result.summary || "Generating summary…"}
                                 </p>
                               </div>
 
@@ -2309,7 +2426,7 @@ export default function VapiCampaignDashboard() {
                                   border: "1px solid #1e2140",
                                 }}
                               >
-                                {c.result.transcript}
+                                {c.result.transcript || "Transcript not yet available. It arrives a few seconds after the call ends."}
                               </pre>
                             </details>
                           </div>
@@ -2344,6 +2461,56 @@ export default function VapiCampaignDashboard() {
               )}
             </div>
           )}
+
+          {/* ─── HISTORY TAB ─── */}
+          {tab === "history" && (() => {
+            const history = JSON.parse(localStorage.getItem("vapi_campaign_history") || "[]");
+            return (
+              <div style={{ animation: "slideIn 0.2s ease" }}>
+                {history.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: 48, color: "#6b7094", fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
+                    No campaigns yet — run your first campaign and it will appear here.
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {history.map((c) => (
+                      <div
+                        key={c.id}
+                        onClick={() => loadCampaign(c)}
+                        style={{
+                          background: "#0f1124",
+                          border: "1px solid #1e2140",
+                          borderRadius: 12,
+                          padding: "16px 20px",
+                          cursor: "pointer",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          transition: "border-color 0.15s",
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.borderColor = "rgba(78,205,196,0.4)"}
+                        onMouseLeave={(e) => e.currentTarget.style.borderColor = "#1e2140"}
+                      >
+                        <div>
+                          <div style={{ fontWeight: 700, color: "#e0e4f0", fontSize: 14, marginBottom: 4 }}>
+                            {c.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#6b7094", fontFamily: "'JetBrains Mono', monospace" }}>
+                            {new Date(c.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                            {c.businessName ? ` · ${c.businessName}` : ""}
+                            {" · "}{c.contactCount} contacts
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 11, color: "#4ecdc4", fontFamily: "'JetBrains Mono', monospace" }}>
+                          Load →
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Footer */}
           <div
