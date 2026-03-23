@@ -939,6 +939,7 @@ export default function VapiCampaignDashboard() {
   const [campaignName, setCampaignName] = useState("");
   const [countryCode, setCountryCode] = useState("+1");
   const [phoneDigits, setPhoneDigits] = useState("");
+  const [contactNameInput, setContactNameInput] = useState("");
 
   // Refs
   const timerRef = useRef(null);
@@ -1007,8 +1008,9 @@ export default function VapiCampaignDashboard() {
     const digits = phoneDigits.replace(/\D/g, "");
     if (!digits) return;
     const phone = `${countryCode}${digits}`;
-    setContacts((prev) => [...prev, { id: Date.now(), phone, name: "", status: CALL_STATES.PENDING, result: null }]);
+    setContacts((prev) => [...prev, { id: Date.now(), phone, name: contactNameInput.trim(), status: CALL_STATES.PENDING, result: null }]);
     setPhoneDigits("");
+    setContactNameInput("");
   };
 
   const loadCampaign = async (meta) => {
@@ -1780,6 +1782,14 @@ export default function VapiCampaignDashboard() {
                     onKeyDown={(e) => e.key === "Enter" && addSingleContact()}
                     style={{ ...inputStyle, flex: 1, padding: "10px 14px" }}
                   />
+                  <input
+                    type="text"
+                    placeholder="Name (optional)"
+                    value={contactNameInput}
+                    onChange={(e) => setContactNameInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && addSingleContact()}
+                    style={{ ...inputStyle, flex: 1, padding: "10px 14px" }}
+                  />
                   <button
                     onClick={addSingleContact}
                     style={{ ...btnBase, padding: "10px 18px", background: "#1e2140", color: "#4ecdc4", border: "1px solid rgba(78,205,196,0.3)", borderRadius: 8, flexShrink: 0 }}
@@ -1787,21 +1797,10 @@ export default function VapiCampaignDashboard() {
                     + Add
                   </button>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                <div style={{ marginTop: 4 }}>
                   <p style={{ fontSize: 11, color: "#6b7094", margin: 0 }}>
-                    Select country code, type digits, press Enter or Add. Use Import for bulk.
+                    Select country code, type digits and optional name, press Enter or Add. Use Import for bulk.
                   </p>
-                  <button
-                    onClick={addContacts}
-                    style={{
-                      ...btnBase,
-                      background: "linear-gradient(135deg, #4ecdc4, #44b8b0)",
-                      color: "#0a0c18",
-                      fontWeight: 800,
-                    }}
-                  >
-                    + Add to List
-                  </button>
                 </div>
               </div>
 
