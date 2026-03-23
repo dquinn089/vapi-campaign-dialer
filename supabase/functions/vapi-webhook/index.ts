@@ -15,6 +15,8 @@ Deno.serve(async (req) => {
     const { message } = payload;
     const callId = message?.call?.id ?? payload.call?.id;
 
+    console.log(`[webhook] type=${message?.type} status=${message?.status} endedReason=${message?.endedReason} callId=${callId}`);
+
     // ─── TOOL CALLS (mid-call, real-time) ───
     if (message?.type === "tool-calls") {
       for (const toolCall of message.toolCalls ?? []) {
@@ -150,7 +152,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ success: true });
   } catch (error) {
-    console.error("Webhook error:", error);
+    console.error("[webhook] Unhandled error:", error);
     return Response.json({ error: (error as Error).message }, { status: 500 });
   }
 });
