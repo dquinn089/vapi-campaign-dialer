@@ -633,7 +633,8 @@ const ImportModal = ({ onClose, onAddContacts }) => {
           });
         });
       } else if (["xlsx", "xls"].includes(ext)) {
-        const XLSX = await import("xlsx");
+        const xlsxMod = await import("xlsx");
+        const XLSX = xlsxMod.default ?? xlsxMod;
         const buf = await file.arrayBuffer();
         const wb = XLSX.read(buf);
         const ws = wb.Sheets[wb.SheetNames[0]];
