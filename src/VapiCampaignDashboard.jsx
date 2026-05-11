@@ -622,7 +622,7 @@ const ImportModal = ({ onClose, onAddContacts }) => {
     const ext = file.name.split(".").pop().toLowerCase();
     try {
       let rows = [], cols = [];
-      if (["csv", "txt", "tsv"].includes(ext)) {
+      if (["csv", "txt"].includes(ext)) {
         const Papa = (await import("papaparse")).default;
         await new Promise((resolve, reject) => {
           Papa.parse(file, {
@@ -641,7 +641,7 @@ const ImportModal = ({ onClose, onAddContacts }) => {
         rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
         cols = Object.keys(rows[0] || {});
       } else {
-        setParseError("Unsupported file. Use CSV, TXT, TSV, XLSX, or XLS.");
+        setParseError("Unsupported file. Use CSV, TXT, XLSX, or XLS.");
         return;
       }
       if (!rows.length) { setParseError("File appears to be empty."); return; }
@@ -756,8 +756,8 @@ const ImportModal = ({ onClose, onAddContacts }) => {
               >
                 <div style={{ fontSize: 36, marginBottom: 12 }}>📂</div>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>Drop a file here, or click to browse</div>
-                <div style={{ fontSize: 12, color: "#6b7094" }}>CSV · Excel (.xlsx / .xls) · TXT · TSV</div>
-                <input ref={fileRef} type="file" accept=".csv,.txt,.tsv,.xlsx,.xls" style={{ display: "none" }} onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])} />
+                <div style={{ fontSize: 12, color: "#6b7094" }}>CSV · Excel (.xlsx / .xls) · TXT</div>
+                <input ref={fileRef} type="file" accept=".csv,.txt,.xlsx,.xls" style={{ display: "none" }} onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])} />
               </div>
 
               {parseError && (
