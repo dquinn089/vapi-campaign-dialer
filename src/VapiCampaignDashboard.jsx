@@ -585,6 +585,199 @@ const btnBase = {
   gap: 8,
 };
 
+// ─── Help / Guide Modal ───
+const HelpModal = ({ onClose }) => {
+  const [section, setSection] = useState("quickstart");
+
+  const overlay = {
+    position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    zIndex: 1000, padding: 20,
+  };
+  const modal = {
+    background: "#0f1124", border: "1px solid #1e2140", borderRadius: 16,
+    width: "100%", maxWidth: 720, maxHeight: "85vh",
+    display: "flex", flexDirection: "column", animation: "slideIn 0.2s ease",
+  };
+  const sidebarBtn = (key) => ({
+    width: "100%", textAlign: "left", background: section === key ? "#1e2140" : "transparent",
+    color: section === key ? "#4ecdc4" : "#6b7094", border: "none", borderRadius: 8,
+    padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer",
+    fontFamily: "'JetBrains Mono', monospace", letterSpacing: "0.05em",
+  });
+  const h2 = { fontSize: 14, fontWeight: 700, color: "#e0e4f0", margin: "0 0 12px 0" };
+  const h3 = { fontSize: 12, fontWeight: 700, color: "#4ecdc4", margin: "16px 0 6px 0", textTransform: "uppercase", letterSpacing: "0.08em" };
+  const p = { fontSize: 13, color: "#9ca0b8", lineHeight: 1.7, margin: "0 0 10px 0" };
+  const li = { fontSize: 13, color: "#9ca0b8", lineHeight: 1.7, marginBottom: 4 };
+  const badge = (color, bg, text) => (
+    <span style={{ display: "inline-block", padding: "2px 10px", borderRadius: 20, background: bg, color, fontSize: 11, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace", marginRight: 6 }}>{text}</span>
+  );
+  const tip = (text) => (
+    <div style={{ background: "rgba(78,205,196,0.06)", border: "1px solid rgba(78,205,196,0.15)", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#4ecdc4", marginTop: 8 }}>
+      💡 {text}
+    </div>
+  );
+
+  const sections = {
+    quickstart: (
+      <div>
+        <p style={h2}>Get a campaign running in 3 steps</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {[
+            { n: "1", title: "Configure VAPI credentials", body: "Click ⚙ CONFIG → VAPI tab. Paste your API Key, Assistant ID, and Phone Number ID from your VAPI dashboard. The mode badge in the header will switch from ◌ DEMO to ● LIVE once all three fields are filled." },
+            { n: "2", title: "Add contacts", body: "In Campaign Setup, type or paste phone numbers manually (one per line), or click Import File to upload a CSV or Excel spreadsheet. Give the campaign a name so you can find it in History later." },
+            { n: "3", title: "Start the campaign", body: "Hit Start Campaign. The dialer works through your list automatically — one call at a time. Results update in real time as calls complete. Use Pause to hold the queue, or Stop to end early." },
+          ].map(({ n, title, body }) => (
+            <div key={n} style={{ display: "flex", gap: 14, background: "#0a0c18", borderRadius: 10, padding: 14 }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#1e2140", color: "#4ecdc4", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, flexShrink: 0 }}>{n}</div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#e0e4f0", marginBottom: 4 }}>{title}</div>
+                <div style={{ fontSize: 12, color: "#9ca0b8", lineHeight: 1.6 }}>{body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+        {tip("No VAPI account yet? The dashboard runs in DEMO mode by default — all calls are simulated so you can explore the UI without any credentials.")}
+      </div>
+    ),
+
+    demo_live: (
+      <div>
+        <p style={h2}>Demo vs Live Mode</p>
+        <p style={p}>The mode is shown in the header badge and switches automatically based on your CONFIG.</p>
+        <p style={h3}>◌ Demo Mode</p>
+        <p style={p}>Active when any VAPI credential is missing. Calls are fully simulated — random outcomes are generated with realistic delays. Nothing is dialed, no charges incurred. Great for testing the UI and workflow.</p>
+        <p style={h3}>● Live Mode</p>
+        <p style={p}>Active when all three VAPI fields are filled (API Key, Assistant ID, Phone Number ID). Real calls are placed through VAPI and Twilio. Results come back via webhook and update in real time through Supabase.</p>
+        {tip("Always do a Demo run first to make sure your contact list looks right before switching to Live.")}
+      </div>
+    ),
+
+    contacts: (
+      <div>
+        <p style={h2}>Adding Contacts</p>
+        <p style={h3}>Manual Entry</p>
+        <p style={p}>Type or paste phone numbers directly into the text box — one number per line. You can include a name by putting it before the number separated by a comma or space:</p>
+        <div style={{ background: "#0a0c18", borderRadius: 8, padding: "10px 14px", fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "#6b7094", marginBottom: 10 }}>
+          John Smith, +12025550101<br />
+          Jane Doe +13105550102<br />
+          +17185550103
+        </div>
+        <p style={h3}>Import File</p>
+        <p style={p}>Click Import File and upload a spreadsheet or CSV. Supported formats:</p>
+        <ul style={{ paddingLeft: 18, margin: "0 0 10px 0" }}>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>CSV</strong> — comma-separated, must have a header row</li>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>TXT</strong> — same as CSV, comma-separated with headers</li>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>XLSX / XLS</strong> — Excel files, first sheet is used</li>
+        </ul>
+        <p style={p}>After uploading, you'll map which column is the phone number and which is the name. The dashboard auto-detects common column names like "phone", "mobile", "name", "contact".</p>
+        {tip("Phone numbers are automatically normalised — (310) 555-0102, 3105550102, and +13105550102 all work.")}
+      </div>
+    ),
+
+    running: (
+      <div>
+        <p style={h2}>Running a Campaign</p>
+        <p style={h3}>Controls</p>
+        <ul style={{ paddingLeft: 18, margin: "0 0 12px 0" }}>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>Start Campaign</strong> — begins dialing from the top of the list. Skips any contacts already called.</li>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>Pause</strong> — holds the queue after the current call finishes. Resume picks up where it left off.</li>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>Stop</strong> — ends the campaign. Progress is saved; you can review results in the Results and History tabs.</li>
+        </ul>
+        <p style={h3}>What happens during a call</p>
+        <ul style={{ paddingLeft: 18, margin: "0 0 12px 0" }}>
+          <li style={li}>The contact row shows a pulsing {badge("#4ecdc4", "#1a1f3a", "CALLING")} badge while the call is active.</li>
+          <li style={li}>The AI assistant introduces itself, asks if the contact has a moment, and follows your assistant script.</li>
+          <li style={li}>Depending on the conversation, the AI calls one of three tools: schedule appointment, mark declined, or request callback.</li>
+          <li style={li}>When the call ends, the row updates with the final status, duration, transcript, and AI summary.</li>
+        </ul>
+        {tip("The next call starts automatically once the previous one ends — you don't need to do anything.")}
+      </div>
+    ),
+
+    results: (
+      <div>
+        <p style={h2}>Reading Results</p>
+        <p style={h3}>Status Badges</p>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+          {[
+            { color: "#4ecdc4", bg: "#1a1f3a", label: "CALLING", desc: "Call in progress" },
+            { color: "#7bed9f", bg: "#1a2a1f", label: "ANSWERED", desc: "Live conversation completed" },
+            { color: "#00d2ff", bg: "#0d2a1f", label: "SCHEDULED", desc: "Appointment booked" },
+            { color: "#ff6b6b", bg: "#2a1a1f", label: "DECLINED", desc: "Contact said no" },
+            { color: "#f8a978", bg: "#2a1f1a", label: "VOICEMAIL", desc: "Left a voicemail" },
+            { color: "#6b7094", bg: "#1a1a2e", label: "NO ANSWER", desc: "No one picked up" },
+            { color: "#ff4757", bg: "#2a1a1a", label: "FAILED", desc: "Call error" },
+          ].map(({ color, bg, label, desc }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {badge(color, bg, label)}
+              <span style={{ fontSize: 12, color: "#6b7094" }}>{desc}</span>
+            </div>
+          ))}
+        </div>
+        <p style={h3}>Expanding a Row</p>
+        <p style={p}>Click any contact row to expand it and see the full call details: AI-generated summary, transcript of the conversation, duration, end reason, and a link to the recording if available.</p>
+        <p style={h3}>History Tab</p>
+        <p style={p}>Past campaigns are saved in the History tab. Click any campaign to review its results. Each campaign shows total contacts, call outcomes, and a full results breakdown.</p>
+      </div>
+    ),
+
+    config: (
+      <div>
+        <p style={h2}>Configuration</p>
+        <p style={h3}>VAPI Tab</p>
+        <ul style={{ paddingLeft: 18, margin: "0 0 12px 0" }}>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>API Key</strong> — from your VAPI dashboard under Account → API Keys.</li>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>Assistant ID</strong> — the ID of the VAPI assistant that handles calls. Found on the Assistants page.</li>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>Phone Number ID</strong> — the outbound number to dial from. Found on the Phone Numbers page.</li>
+        </ul>
+        <p style={h3}>Database Tab</p>
+        <p style={p}>Connects to Supabase to persist call results. The Supabase URL and anon key are set in your <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#4ecdc4" }}>.env</code> file — you don't need to re-enter them here unless using a different project.</p>
+        {tip("Config is saved in your browser's localStorage. You only need to fill it in once per device.")}
+      </div>
+    ),
+  };
+
+  const nav = [
+    { key: "quickstart", label: "⚡ Quick Start" },
+    { key: "demo_live", label: "◌ / ● Demo vs Live" },
+    { key: "contacts", label: "👥 Adding Contacts" },
+    { key: "running", label: "▶ Running a Campaign" },
+    { key: "results", label: "📊 Reading Results" },
+    { key: "config", label: "⚙ Configuration" },
+  ];
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={modal} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e2140", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Dashboard Guide</div>
+            <div style={{ fontSize: 11, color: "#6b7094", marginTop: 2, fontFamily: "'JetBrains Mono', monospace" }}>How to use the VAPI Campaign Dialer</div>
+          </div>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: "#6b7094", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+          {/* Sidebar */}
+          <div style={{ width: 180, flexShrink: 0, borderRight: "1px solid #1e2140", padding: 12, display: "flex", flexDirection: "column", gap: 2 }}>
+            {nav.map(({ key, label }) => (
+              <button key={key} style={sidebarBtn(key)} onClick={() => setSection(key)}>{label}</button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
+            {sections[section]}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Import Modal ───
 const ImportModal = ({ onClose, onAddContacts }) => {
   const [step, setStep] = useState("upload");
@@ -935,6 +1128,7 @@ export default function VapiCampaignDashboard() {
   });
   const [dbConnStatus, setDbConnStatus] = useState("idle");
   const [showConfig, setShowConfig] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [configTab, setConfigTab] = useState("vapi");
   const [tab, setTab] = useState("setup");
   const [campaignName, setCampaignName] = useState("");
@@ -1579,18 +1773,39 @@ export default function VapiCampaignDashboard() {
                 Automated outbound calling · AI-powered conversations
               </p>
             </div>
-            <button
-              onClick={() => setShowConfig(!showConfig)}
-              style={{
-                ...btnBase,
-                background: showConfig ? "#1e2140" : "transparent",
-                color: "#6b7094",
-                border: "1px solid #1e2140",
-                fontSize: 11,
-              }}
-            >
-              ⚙ CONFIG
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={() => setShowHelp(true)}
+                style={{
+                  ...btnBase,
+                  background: "transparent",
+                  color: "#6b7094",
+                  border: "1px solid #1e2140",
+                  fontSize: 11,
+                  width: 34,
+                  padding: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                }}
+                title="Open guide"
+              >
+                ?
+              </button>
+              <button
+                onClick={() => setShowConfig(!showConfig)}
+                style={{
+                  ...btnBase,
+                  background: showConfig ? "#1e2140" : "transparent",
+                  color: "#6b7094",
+                  border: "1px solid #1e2140",
+                  fontSize: 11,
+                }}
+              >
+                ⚙ CONFIG
+              </button>
+            </div>
           </div>
 
           {/* Config panel */}
@@ -2540,6 +2755,9 @@ export default function VapiCampaignDashboard() {
           onAddContacts={(newContacts) => setContacts((prev) => [...prev, ...newContacts])}
         />
       )}
+
+      {/* Help Modal */}
+      {showHelp && <HelpModal onClose={() => setShowHelp(false)} />}
     </>
   );
 }
