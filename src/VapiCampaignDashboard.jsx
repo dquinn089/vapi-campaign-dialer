@@ -562,8 +562,14 @@ const HelpModal = ({ onClose }) => {
           <li style={li}><strong style={{ color: "#e0e4f0" }}>Phone Number ID</strong> — the outbound number to dial from. Found on the Phone Numbers page.</li>
         </ul>
         <p style={h3}>Database Tab</p>
-        <p style={p}>Connects to Supabase to persist call results. The Supabase URL and anon key are set in your <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#4ecdc4" }}>.env</code> file — you don't need to re-enter them here unless using a different project.</p>
-        {tip("Config is saved in your browser's localStorage. You only need to fill it in once per device.")}
+        <p style={p}>Connects to Supabase to persist call results and power real-time updates. You need three things from your Supabase project:</p>
+        <ul style={{ paddingLeft: 18, margin: "0 0 12px 0" }}>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>Project URL</strong> — found in Supabase → Project Settings → API. Looks like <code style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: "#4ecdc4" }}>https://xxxx.supabase.co</code></li>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>Anon / Public Key</strong> — also in Project Settings → API. Safe to use in the browser.</li>
+          <li style={li}><strong style={{ color: "#e0e4f0" }}>Service Role Key</strong> — optional. Only needed if you want the Edge Function to bypass row-level security.</li>
+        </ul>
+        <p style={p}>Hit <strong style={{ color: "#e0e4f0" }}>Test Connection</strong> after filling in the URL and anon key to confirm they're valid.</p>
+        {tip("Credentials are saved in your browser's localStorage — you only need to enter them once per device. No .env file required.")}
       </div>
     ),
   };
