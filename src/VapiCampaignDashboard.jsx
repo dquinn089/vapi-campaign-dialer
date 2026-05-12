@@ -237,211 +237,41 @@ const VapiConfigPanel = ({ config, setConfig }) => (
 );
 
 // ─── Database Config Panel ───
-const DB_PROVIDERS = [
-  { key: "supabase", label: "Supabase", icon: "⚡" },
-  { key: "postgres", label: "PostgreSQL", icon: "🐘" },
-  { key: "mysql", label: "MySQL", icon: "🐬" },
-  { key: "sqlite", label: "SQLite", icon: "📦" },
-  { key: "rest", label: "Custom REST API", icon: "🔌" },
-];
-
 const DatabaseConfigPanel = ({ config, setConfig, connStatus, onTestConnection }) => {
   const updateField = (field, value) => setConfig({ ...config, [field]: value });
-  const provider = config.provider;
 
   return (
     <div style={{ marginBottom: 24 }}>
-      <label style={labelStyle}>Database Provider</label>
-      <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap" }}>
-        {DB_PROVIDERS.map((p) => (
-          <button
-            key={p.key}
-            onClick={() => updateField("provider", p.key)}
-            style={{
-              ...btnBase,
-              padding: "8px 14px",
-              fontSize: 11,
-              background: provider === p.key ? "#1e2140" : "transparent",
-              color: provider === p.key ? "#e0e4f0" : "#6b7094",
-              border: `1px solid ${provider === p.key ? "#4ecdc4" : "#1e2140"}`,
-              borderRadius: 8,
-            }}
-          >
-            {p.icon} {p.label}
-          </button>
-        ))}
-      </div>
-
-      {provider === "supabase" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Supabase Project URL</label>
-            <input
-              placeholder="https://xxxxxxxxxxxx.supabase.co"
-              value={config.supabaseUrl}
-              onChange={(e) => updateField("supabaseUrl", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Anon / Public Key</label>
-            <input
-              type="password"
-              placeholder="sb_publishable_..."
-              value={config.supabaseAnonKey}
-              onChange={(e) => updateField("supabaseAnonKey", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Service Role Key (optional)</label>
-            <input
-              type="password"
-              placeholder="sb_secret_..."
-              value={config.supabaseServiceKey}
-              onChange={(e) => updateField("supabaseServiceKey", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-        </div>
-      )}
-
-      {(provider === "postgres" || provider === "mysql") && (
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}>
-          <div>
-            <label style={labelStyle}>Host</label>
-            <input
-              placeholder={provider === "postgres" ? "db.example.com" : "127.0.0.1"}
-              value={config.host}
-              onChange={(e) => updateField("host", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Port</label>
-            <input
-              placeholder={provider === "postgres" ? "5432" : "3306"}
-              value={config.port}
-              onChange={(e) => updateField("port", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Database</label>
-            <input
-              placeholder="campaign_db"
-              value={config.database}
-              onChange={(e) => updateField("database", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>SSL</label>
-            <button
-              onClick={() => updateField("ssl", !config.ssl)}
-              style={{
-                ...inputStyle,
-                cursor: "pointer",
-                textAlign: "left",
-                color: config.ssl ? "#4ecdc4" : "#6b7094",
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span
-                style={{
-                  width: 28,
-                  height: 16,
-                  borderRadius: 8,
-                  background: config.ssl ? "#4ecdc4" : "#1e2140",
-                  display: "inline-block",
-                  position: "relative",
-                  transition: "background 0.2s",
-                }}
-              >
-                <span
-                  style={{
-                    width: 12,
-                    height: 12,
-                    borderRadius: "50%",
-                    background: "#fff",
-                    position: "absolute",
-                    top: 2,
-                    left: config.ssl ? 14 : 2,
-                    transition: "left 0.2s",
-                  }}
-                />
-              </span>
-              {config.ssl ? "Enabled" : "Disabled"}
-            </button>
-          </div>
-          <div>
-            <label style={labelStyle}>Username</label>
-            <input
-              placeholder="postgres"
-              value={config.username}
-              onChange={(e) => updateField("username", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div>
-            <label style={labelStyle}>Password</label>
-            <input
-              type="password"
-              placeholder="••••••••"
-              value={config.password}
-              onChange={(e) => updateField("password", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-        </div>
-      )}
-
-      {provider === "sqlite" && (
-        <div>
-          <label style={labelStyle}>Database File Path</label>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <label style={labelStyle}>Supabase Project URL</label>
           <input
-            placeholder="./data/campaign.db"
-            value={config.filePath}
-            onChange={(e) => updateField("filePath", e.target.value)}
+            placeholder="https://xxxxxxxxxxxx.supabase.co"
+            value={config.supabaseUrl}
+            onChange={(e) => updateField("supabaseUrl", e.target.value)}
             style={inputStyle}
           />
         </div>
-      )}
-
-      {provider === "rest" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Base URL</label>
-            <input
-              placeholder="https://api.example.com/v1"
-              value={config.baseUrl}
-              onChange={(e) => updateField("baseUrl", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
-          <div style={{ gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Authorization Header</label>
-            <input
-              type="password"
-              placeholder="Bearer xxxxxxxxxxxx"
-              value={config.authHeader}
-              onChange={(e) => updateField("authHeader", e.target.value)}
-              style={inputStyle}
-            />
-          </div>
+        <div>
+          <label style={labelStyle}>Anon / Public Key</label>
+          <input
+            type="password"
+            placeholder="sb_publishable_..."
+            value={config.supabaseAnonKey}
+            onChange={(e) => updateField("supabaseAnonKey", e.target.value)}
+            style={inputStyle}
+          />
         </div>
-      )}
-
-      <div style={{ marginTop: 16 }}>
-        <label style={labelStyle}>Table / Collection Name</label>
-        <input
-          placeholder="calls"
-          value={config.tableName}
-          onChange={(e) => updateField("tableName", e.target.value)}
-          style={{ ...inputStyle, maxWidth: 300 }}
-        />
+        <div>
+          <label style={labelStyle}>Service Role Key <span style={{ color: "#3a3d5c", fontWeight: 400 }}>(optional)</span></label>
+          <input
+            type="password"
+            placeholder="sb_secret_..."
+            value={config.supabaseServiceKey}
+            onChange={(e) => updateField("supabaseServiceKey", e.target.value)}
+            style={inputStyle}
+          />
+        </div>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
@@ -1114,31 +944,19 @@ export default function VapiCampaignDashboard() {
     try {
       const saved = JSON.parse(localStorage.getItem("vapi_db_config") || "{}");
       return {
-        provider: saved.provider || "supabase",
         // Use saved credentials first, then fall back to env vars so the
         // pre-configured build works out of the box with no manual setup.
         supabaseUrl: saved.supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "",
         supabaseAnonKey: saved.supabaseAnonKey || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "",
         supabaseServiceKey: saved.supabaseServiceKey || "",
-        host: saved.host || "",
-        port: saved.port || "",
-        database: saved.database || "",
-        username: saved.username || "",
-        password: saved.password || "",
-        ssl: saved.ssl ?? true,
-        filePath: saved.filePath || "",
-        baseUrl: saved.baseUrl || "",
-        authHeader: saved.authHeader || "",
         tableName: saved.tableName || "calls",
       };
     } catch {
       return {
-        provider: "supabase",
         supabaseUrl: import.meta.env.VITE_SUPABASE_URL || "",
         supabaseAnonKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "",
         supabaseServiceKey: "",
-        host: "", port: "", database: "", username: "", password: "",
-        ssl: true, filePath: "", baseUrl: "", authHeader: "", tableName: "calls",
+        tableName: "calls",
       };
     }
   });
@@ -1896,12 +1714,9 @@ export default function VapiCampaignDashboard() {
                   onTestConnection={() => {
                     setDbConnStatus("testing");
                     setTimeout(() => {
-                      const hasCredentials =
-                        (dbConfig.provider === "supabase" && dbConfig.supabaseUrl && dbConfig.supabaseAnonKey) ||
-                        ((dbConfig.provider === "postgres" || dbConfig.provider === "mysql") && dbConfig.host && dbConfig.database) ||
-                        (dbConfig.provider === "sqlite" && dbConfig.filePath) ||
-                        (dbConfig.provider === "rest" && dbConfig.baseUrl);
-                      setDbConnStatus(hasCredentials ? "connected" : "error");
+                      setDbConnStatus(
+                        dbConfig.supabaseUrl && dbConfig.supabaseAnonKey ? "connected" : "error"
+                      );
                     }, 1500);
                   }}
                 />
