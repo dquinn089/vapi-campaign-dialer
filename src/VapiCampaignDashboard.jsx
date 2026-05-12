@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "./lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
 const CAMPAIGN_STATES = {
   IDLE: "idle",
@@ -1110,21 +1110,37 @@ export default function VapiCampaignDashboard() {
       return { apiKey: "", assistantId: "", phoneNumberId: "", delayBetweenCalls: 5 };
     }
   });
-  const [dbConfig, setDbConfig] = useState({
-    provider: "supabase",
-    supabaseUrl: "",
-    supabaseAnonKey: "",
-    supabaseServiceKey: "",
-    host: "",
-    port: "",
-    database: "",
-    username: "",
-    password: "",
-    ssl: true,
-    filePath: "",
-    baseUrl: "",
-    authHeader: "",
-    tableName: "calls",
+  const [dbConfig, setDbConfig] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("vapi_db_config") || "{}");
+      return {
+        provider: saved.provider || "supabase",
+        // Use saved credentials first, then fall back to env vars so the
+        // pre-configured build works out of the box with no manual setup.
+        supabaseUrl: saved.supabaseUrl || import.meta.env.VITE_SUPABASE_URL || "",
+        supabaseAnonKey: saved.supabaseAnonKey || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "",
+        supabaseServiceKey: saved.supabaseServiceKey || "",
+        host: saved.host || "",
+        port: saved.port || "",
+        database: saved.database || "",
+        username: saved.username || "",
+        password: saved.password || "",
+        ssl: saved.ssl ?? true,
+        filePath: saved.filePath || "",
+        baseUrl: saved.baseUrl || "",
+        authHeader: saved.authHeader || "",
+        tableName: saved.tableName || "calls",
+      };
+    } catch {
+      return {
+        provider: "supabase",
+        supabaseUrl: import.meta.env.VITE_SUPABASE_URL || "",
+        supabaseAnonKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "",
+        supabaseServiceKey: "",
+        host: "", port: "", database: "", username: "", password: "",
+        ssl: true, filePath: "", baseUrl: "", authHeader: "", tableName: "calls",
+      };
+    }
   });
   const [dbConnStatus, setDbConnStatus] = useState("idle");
   const [showConfig, setShowConfig] = useState(false);
@@ -1142,6 +1158,12 @@ export default function VapiCampaignDashboard() {
   const contactsRef = useRef([]);
   const realtimeChannelRef = useRef(null);
   const fallbackTimersRef = useRef({});
+  // Dynamic Supabase client — built from dbConfig so it works whether credentials
+  // come from the .env file or are entered manually through the Config panel.
+  const supabaseClientRef = useRef(null);
+  if (!supabaseClientRef.current && dbConfig.supabaseUrl && dbConfig.supabaseAnonKey) {
+    supabaseClientRef.current = createClient(dbConfig.supabaseUrl, dbConfig.supabaseAnonKey);
+  }
   const currentVapiCallIdRef = useRef(null);
   // Always-fresh config snapshot for use inside async callbacks
   const configRef = useRef({ vapiConfig, businessName });
@@ -1165,6 +1187,21 @@ export default function VapiCampaignDashboard() {
   useEffect(() => {
     localStorage.setItem("vapi_config_v2", JSON.stringify(vapiConfig));
   }, [vapiConfig]);
+
+  // Persist DB config so credentials survive page reloads
+  useEffect(() => {
+    localStorage.setItem("vapi_db_config", JSON.stringify(dbConfig));
+  }, [dbConfig]);
+
+  // Recreate the Supabase client whenever the URL or key changes
+  useEffect(() => {
+    if (!dbConfig.supabaseUrl || !dbConfig.supabaseAnonKey) return;
+    if (realtimeChannelRef.current) {
+      supabaseClientRef.current?.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
+    supabaseClientRef.current = createClient(dbConfig.supabaseUrl, dbConfig.supabaseAnonKey);
+  }, [dbConfig.supabaseUrl, dbConfig.supabaseAnonKey]);
 
   // Real mode = all three VAPI creds present
   const isRealMode = Boolean(
@@ -1243,7 +1280,7 @@ export default function VapiCampaignDashboard() {
     // Always fetch latest from Supabase so transcript/summary are up to date
     const contact = contactsRef.current.find((c) => c.id === contactId);
     if (contact?.supabaseId) {
-      const { data } = await supabase.from("calls").select("*").eq("id", contact.supabaseId).single();
+      const { data } = await supabaseClientRef.current.from("calls").select("*").eq("id", contact.supabaseId).single();
       if (data) {
         setContacts((prev) => prev.map((c) => c.id === contactId ? { ...c, result: mapRowToResult(data) } : c));
       }
@@ -1261,7 +1298,7 @@ export default function VapiCampaignDashboard() {
     setCampaignId(null);
     setExpandedRow(null);
     if (realtimeChannelRef.current) {
-      supabase.removeChannel(realtimeChannelRef.current);
+      supabaseClientRef.current?.removeChannel(realtimeChannelRef.current);
       realtimeChannelRef.current = null;
     }
   };
@@ -1480,10 +1517,10 @@ export default function VapiCampaignDashboard() {
   // ── Real mode: subscribe to Supabase realtime for this campaign ──
   const setupRealtime = useCallback((cid) => {
     if (realtimeChannelRef.current) {
-      supabase.removeChannel(realtimeChannelRef.current);
+      supabaseClientRef.current?.removeChannel(realtimeChannelRef.current);
     }
 
-    const channel = supabase
+    const channel = supabaseClientRef.current
       .channel(`campaign-${cid}`)
       .on(
         "postgres_changes",
@@ -1561,7 +1598,7 @@ export default function VapiCampaignDashboard() {
       status: "pending",
     }));
 
-    const { data: rows, error } = await supabase.from("calls").insert(inserts).select("id");
+    const { data: rows, error } = await supabaseClientRef.current.from("calls").insert(inserts).select("id");
 
     if (error) {
       console.error("Supabase insert error:", error);
@@ -1648,7 +1685,7 @@ export default function VapiCampaignDashboard() {
       clearTimeout(timerRef.current);
       Object.values(fallbackTimersRef.current).forEach(clearTimeout);
       if (realtimeChannelRef.current) {
-        supabase.removeChannel(realtimeChannelRef.current);
+        supabaseClientRef.current?.removeChannel(realtimeChannelRef.current);
       }
     };
   }, []);
