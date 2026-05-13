@@ -957,6 +957,7 @@ export default function VapiCampaignDashboard() {
   const [phoneDigits, setPhoneDigits] = useState("");
   const [contactNameInput, setContactNameInput] = useState("");
   const [loadingCampaignId, setLoadingCampaignId] = useState(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   // Refs
   const timerRef = useRef(null);
@@ -1105,6 +1106,59 @@ export default function VapiCampaignDashboard() {
 
   const removeContact = (id) => {
     setContacts((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const exportResults = async (format) => {
+    setShowExportMenu(false);
+    if (contacts.length === 0) return;
+
+    const slug = (campaignName || "campaign").replace(/[^a-z0-9]/gi, "-").toLowerCase();
+    const date = new Date().toISOString().split("T")[0];
+    const filename = `${slug}-${date}`;
+
+    const rows = contacts.map((c, i) => ({
+      "#": i + 1,
+      "Name": c.name || "",
+      "Phone": c.phone,
+      "Status": c.status,
+      "Duration (sec)": c.result?.duration ?? "",
+      "Called At": c.result?.calledAt ?? "",
+      "Summary": c.result?.summary ?? "",
+      "Transcript": c.result?.transcript ?? "",
+      "Sentiment": c.result?.sentiment ?? "",
+      "End Reason": c.result?.end_reason ?? "",
+      "Callback Requested": c.result?.tool_call_data?.callback_requested ? "Yes" : "",
+      "Decline Reason": c.result?.tool_call_data?.decline_reason ?? "",
+      "Notes": c.result?.tool_call_data?.notes ?? "",
+    }));
+
+    const headers = Object.keys(rows[0]);
+
+    const triggerDownload = (name, content, mime) => {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    if (format === "csv") {
+      const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const csv = [headers.map(esc).join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join("\n");
+      triggerDownload(`${filename}.csv`, csv, "text/csv;charset=utf-8;");
+    } else if (format === "txt") {
+      const txt = [headers.join("\t"), ...rows.map((r) => headers.map((h) => String(r[h] ?? "").replace(/\t/g, " ")).join("\t"))].join("\n");
+      triggerDownload(`${filename}.txt`, txt, "text/plain;charset=utf-8;");
+    } else if (format === "xlsx") {
+      const xlsxMod = await import("xlsx");
+      const XLSX = xlsxMod.default ?? xlsxMod;
+      const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Results");
+      XLSX.writeFile(wb, `${filename}.xlsx`);
+    }
   };
 
   const clearAll = () => {
@@ -2135,6 +2189,77 @@ export default function VapiCampaignDashboard() {
                     </button>
                   )}
                 </div>
+              )}
+
+              {/* Export */}
+              {contacts.some((c) => c.result) && (
+                <>
+                  {showExportMenu && (
+                    <div
+                      style={{ position: "fixed", inset: 0, zIndex: 99 }}
+                      onClick={() => setShowExportMenu(false)}
+                    />
+                  )}
+                  <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10, position: "relative" }}>
+                    <button
+                      onClick={() => setShowExportMenu((v) => !v)}
+                      style={{
+                        ...btnBase,
+                        background: "transparent",
+                        color: "#4ecdc4",
+                        border: "1px solid rgba(78,205,196,0.3)",
+                        fontSize: 12,
+                        padding: "8px 16px",
+                      }}
+                    >
+                      ↓ Export Results
+                    </button>
+                    {showExportMenu && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "calc(100% + 4px)",
+                          right: 0,
+                          background: "#0f1124",
+                          border: "1px solid #1e2140",
+                          borderRadius: 8,
+                          overflow: "hidden",
+                          zIndex: 100,
+                          minWidth: 170,
+                          boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+                        }}
+                      >
+                        {[
+                          { label: "CSV  (.csv)", format: "csv" },
+                          { label: "Excel  (.xlsx)", format: "xlsx" },
+                          { label: "Text  (.txt)", format: "txt" },
+                        ].map(({ label, format }) => (
+                          <button
+                            key={format}
+                            onClick={() => exportResults(format)}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              textAlign: "left",
+                              padding: "10px 16px",
+                              background: "transparent",
+                              color: "#e0e4f0",
+                              border: "none",
+                              borderBottom: "1px solid #1e2140",
+                              cursor: "pointer",
+                              fontSize: 12,
+                              fontFamily: "'JetBrains Mono', monospace",
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = "#1a1f3a")}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
 
               {/* Results Table */}
