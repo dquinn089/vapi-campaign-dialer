@@ -74,10 +74,9 @@ const StatusBadge = ({ status, isPaused }) => {
 
 const generateMockResult = (contact) => {
   const outcomes = [
-    { status: CALL_STATES.ANSWERED, weight: 25 },
+    { status: CALL_STATES.ANSWERED, weight: 35 },
     { status: CALL_STATES.VOICEMAIL, weight: 35 },
     { status: CALL_STATES.NO_ANSWER, weight: 15 },
-    { status: CALL_STATES.SCHEDULED, weight: 10 },
     { status: CALL_STATES.DECLINED, weight: 10 },
     { status: CALL_STATES.FAILED, weight: 5 },
   ];
@@ -97,8 +96,6 @@ const generateMockResult = (contact) => {
       `AI: "Hi, this is an AI assistant calling on behalf of {biz}. We help businesses like yours grow with smart solutions. Would you be interested in scheduling a quick 15-minute call to learn more?"\nContact: "Hmm, tell me more about what you offer."\nAI: "We specialize in helping businesses streamline their operations and increase revenue. I'd love to set up a brief call with our team to discuss your specific needs. Would that work for you?"\nContact: "I'm a bit busy right now, maybe another time."`,
     [CALL_STATES.VOICEMAIL]:
       `AI: "Hi, this message is for ${contact.name || "the business owner"}. I'm an AI assistant calling on behalf of {biz}. This call could have been a potential client reaching out to your business. If you're missing calls like this, our AI-powered solution can help ensure you never miss another opportunity. Please call us back or visit our website to learn more. Thank you!"`,
-    [CALL_STATES.SCHEDULED]:
-      `AI: "Hi, this is an AI assistant calling on behalf of {biz}. We help businesses capture every lead and never miss a call. Would you be interested in a quick demo?"\nContact: "Actually, yes — we've been losing calls lately. When can we talk?"\nAI: "Wonderful! I can schedule you for a 15-minute call. How does tomorrow at 2 PM work?"\nContact: "That works. Let's do it."\n[Tool Call: schedule_appointment → {date: "2026-02-27", time: "2:00 PM"}]`,
     [CALL_STATES.DECLINED]:
       `AI: "Hi, this is an AI assistant calling on behalf of {biz}. We help businesses—"\nContact: "Not interested, thanks." *click*\n[Tool Call: mark_declined → {reason: "Not interested"}]`,
     [CALL_STATES.NO_ANSWER]: "No answer — call rang out after 30 seconds.",
@@ -108,7 +105,6 @@ const generateMockResult = (contact) => {
   const durations = {
     [CALL_STATES.ANSWERED]: Math.floor(Math.random() * 60) + 30,
     [CALL_STATES.VOICEMAIL]: Math.floor(Math.random() * 20) + 15,
-    [CALL_STATES.SCHEDULED]: Math.floor(Math.random() * 90) + 45,
     [CALL_STATES.DECLINED]: Math.floor(Math.random() * 10) + 3,
     [CALL_STATES.NO_ANSWER]: 30,
     [CALL_STATES.FAILED]: 0,
@@ -116,7 +112,6 @@ const generateMockResult = (contact) => {
 
   const sentiments = {
     [CALL_STATES.ANSWERED]: ["warm", "neutral", "curious"][Math.floor(Math.random() * 3)],
-    [CALL_STATES.SCHEDULED]: "positive",
     [CALL_STATES.DECLINED]: ["cold", "neutral", "annoyed"][Math.floor(Math.random() * 3)],
     [CALL_STATES.VOICEMAIL]: null,
     [CALL_STATES.NO_ANSWER]: null,
@@ -124,8 +119,7 @@ const generateMockResult = (contact) => {
   };
 
   const summaries = {
-    [CALL_STATES.ANSWERED]: "Contact was interested but said they were busy. Did not commit to a meeting. Possible follow-up candidate.",
-    [CALL_STATES.SCHEDULED]: "Contact expressed pain point about missing calls. Agreed to a 15-minute demo call tomorrow at 2:00 PM.",
+    [CALL_STATES.ANSWERED]: "Contact was interested but said they were busy. Did not commit. Possible follow-up candidate.",
     [CALL_STATES.DECLINED]: "Contact declined immediately. No interest expressed.",
     [CALL_STATES.VOICEMAIL]: "Voicemail reached. Left message about missed opportunity and AI solution.",
     [CALL_STATES.NO_ANSWER]: "No answer after 30 seconds of ringing.",
@@ -134,7 +128,6 @@ const generateMockResult = (contact) => {
 
   const endReasons = {
     [CALL_STATES.ANSWERED]: "customer-ended-call",
-    [CALL_STATES.SCHEDULED]: "assistant-ended-call",
     [CALL_STATES.DECLINED]: "customer-ended-call",
     [CALL_STATES.VOICEMAIL]: "voicemail-reached",
     [CALL_STATES.NO_ANSWER]: "no-answer-timeout",
@@ -142,13 +135,6 @@ const generateMockResult = (contact) => {
   };
 
   const toolCallData = {};
-  if (chosen === CALL_STATES.SCHEDULED) {
-    const tomorrow = new Date(Date.now() + 86400000);
-    toolCallData.scheduled_date = tomorrow.toISOString().split("T")[0];
-    toolCallData.scheduled_time = "2:00 PM";
-    toolCallData.contact_name = contact.name || null;
-    toolCallData.notes = "Contact mentioned they've been losing calls. High intent.";
-  }
   if (chosen === CALL_STATES.DECLINED) {
     toolCallData.decline_reason = "Not interested";
   }
@@ -163,10 +149,6 @@ const generateMockResult = (contact) => {
     status: chosen,
     transcript: transcripts[chosen] || "",
     duration: durations[chosen] || 0,
-    scheduledTime:
-      chosen === CALL_STATES.SCHEDULED
-        ? `${toolCallData.scheduled_date} at ${toolCallData.scheduled_time}`
-        : null,
     calledAt: new Date().toLocaleString(),
     end_reason: endReasons[chosen] || "unknown",
     summary: summaries[chosen] || "",
@@ -517,8 +499,8 @@ const HelpModal = ({ onClose }) => {
         <p style={h3}>What happens during a call</p>
         <ul style={{ paddingLeft: 18, margin: "0 0 12px 0" }}>
           <li style={li}>The contact row shows a pulsing {badge("#4ecdc4", "#1a1f3a", "CALLING")} badge while the call is active.</li>
-          <li style={li}>The AI assistant introduces itself, asks if the contact has a moment, and follows your assistant script.</li>
-          <li style={li}>Depending on the conversation, the AI calls one of three tools: schedule appointment, mark declined, or request callback.</li>
+          <li style={li}>The AI assistant introduces itself, follows your assistant script, and logs the outcome via tool calls.</li>
+          <li style={li}>Depending on the conversation, the AI calls one of two tools: mark declined, or request callback.</li>
           <li style={li}>When the call ends, the row updates with the final status, duration, transcript, and AI summary.</li>
         </ul>
         {tip("The next call starts automatically once the previous one ends — you don't need to do anything.")}
@@ -533,7 +515,6 @@ const HelpModal = ({ onClose }) => {
           {[
             { color: "#4ecdc4", bg: "#1a1f3a", label: "CALLING", desc: "Call in progress" },
             { color: "#7bed9f", bg: "#1a2a1f", label: "ANSWERED", desc: "Live conversation completed" },
-            { color: "#00d2ff", bg: "#0d2a1f", label: "SCHEDULED", desc: "Appointment booked" },
             { color: "#ff6b6b", bg: "#2a1a1f", label: "DECLINED", desc: "Contact said no" },
             { color: "#f8a978", bg: "#2a1f1a", label: "VOICEMAIL", desc: "Left a voicemail" },
             { color: "#6b7094", bg: "#1a1a2e", label: "NO ANSWER", desc: "No one picked up" },
@@ -1177,12 +1158,6 @@ export default function VapiCampaignDashboard() {
   // ── Real mode: map a Supabase row to the result shape the UI expects ──
   const mapRowToResult = (row) => {
     const toolCallData = {};
-    if (row.scheduled_date) {
-      toolCallData.scheduled_date = row.scheduled_date;
-      toolCallData.scheduled_time = row.scheduled_time;
-      if (row.contact_name) toolCallData.contact_name = row.contact_name;
-      if (row.notes) toolCallData.notes = row.notes;
-    }
     if (row.decline_reason) toolCallData.decline_reason = row.decline_reason;
     if (row.callback_requested) {
       toolCallData.callback_requested = row.callback_requested;
@@ -1198,10 +1173,6 @@ export default function VapiCampaignDashboard() {
       summary: row.summary || "",
       sentiment: row.sentiment || null,
       recording_url: row.recording_url || null,
-      scheduledTime:
-        row.scheduled_date && row.scheduled_time
-          ? `${row.scheduled_date} at ${row.scheduled_time}`
-          : null,
       tool_call_data: Object.keys(toolCallData).length > 0 ? toolCallData : null,
     };
   };
@@ -1529,7 +1500,6 @@ export default function VapiCampaignDashboard() {
   const stats = {
     total: contacts.length,
     called: contacts.filter((c) => c.status !== CALL_STATES.PENDING && c.status !== CALL_STATES.CALLING).length,
-    scheduled: contacts.filter((c) => c.status === CALL_STATES.SCHEDULED).length,
     answered: contacts.filter((c) => c.status === CALL_STATES.ANSWERED).length,
     voicemail: contacts.filter((c) => c.status === CALL_STATES.VOICEMAIL).length,
     declined: contacts.filter((c) => c.status === CALL_STATES.DECLINED).length,
@@ -2074,13 +2044,12 @@ export default function VapiCampaignDashboard() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gridTemplateColumns: "repeat(3, 1fr)",
                       gap: 12,
                       marginTop: 16,
                     }}
                   >
                     {[
-                      { label: "Scheduled", value: stats.scheduled, color: "#00d2ff" },
                       { label: "Answered", value: stats.answered, color: "#7bed9f" },
                       { label: "Voicemail", value: stats.voicemail, color: "#f8a978" },
                       { label: "Declined", value: stats.declined + stats.noAnswer + stats.failed, color: "#ff6b6b" },
@@ -2260,9 +2229,7 @@ export default function VapiCampaignDashboard() {
                             }
                           />
                           <span style={{ color: "#9ca0b8", fontSize: 11 }}>
-                            {c.result?.tool_call_data?.scheduled_date
-                              ? `📅 ${c.result.tool_call_data.scheduled_time}`
-                              : c.result?.tool_call_data?.callback_requested
+                            {c.result?.tool_call_data?.callback_requested
                               ? "📞 Callback"
                               : c.result?.tool_call_data?.decline_reason
                               ? `✗ ${c.result.tool_call_data.decline_reason}`
@@ -2438,27 +2405,6 @@ export default function VapiCampaignDashboard() {
                               )}
                             </div>
 
-                            {c.result.scheduledTime && (
-                              <div
-                                style={{
-                                  marginBottom: 14,
-                                  padding: "10px 14px",
-                                  background: "linear-gradient(135deg, rgba(0,210,255,0.08), rgba(78,205,196,0.05))",
-                                  border: "1px solid rgba(0,210,255,0.2)",
-                                  borderRadius: 8,
-                                  fontSize: 12,
-                                  color: "#00d2ff",
-                                  fontFamily: "'JetBrains Mono', monospace",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 8,
-                                }}
-                              >
-                                <span style={{ fontSize: 16 }}>📅</span>
-                                Appointment Scheduled: {c.result.scheduledTime}
-                              </div>
-                            )}
-
                             {c.result.tool_call_data?.callback_requested && (
                               <div
                                 style={{
@@ -2538,7 +2484,7 @@ export default function VapiCampaignDashboard() {
                     Campaign Complete
                   </div>
                   <div style={{ fontSize: 12, color: "#6b7094", fontFamily: "'JetBrains Mono', monospace" }}>
-                    {stats.scheduled} scheduled · {stats.answered} answered · {stats.voicemail} voicemails left ·{" "}
+                    {stats.answered} answered · {stats.voicemail} voicemails left ·{" "}
                     {stats.declined + stats.noAnswer + stats.failed} unreached
                   </div>
                 </div>
