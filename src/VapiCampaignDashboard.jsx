@@ -1284,8 +1284,8 @@ export default function VapiCampaignDashboard() {
       if (callData.id) currentVapiCallIdRef.current = callData.id;
 
       // Link the VAPI call ID to the Supabase row so webhooks can match it
-      if (callData.id && contact.supabaseId) {
-        await supabase
+      if (callData.id && contact.supabaseId && supabaseClientRef.current) {
+        await supabaseClientRef.current
           .from("calls")
           .update({ vapi_call_id: callData.id, status: "calling" })
           .eq("id", contact.supabaseId);
@@ -1306,8 +1306,8 @@ export default function VapiCampaignDashboard() {
           tool_call_data: null,
         };
 
-        if (contact.supabaseId) {
-          const { data } = await supabase
+        if (contact.supabaseId && supabaseClientRef.current) {
+          const { data } = await supabaseClientRef.current
             .from("calls")
             .select("*")
             .eq("id", contact.supabaseId)
