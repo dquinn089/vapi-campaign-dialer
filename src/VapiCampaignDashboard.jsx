@@ -975,6 +975,7 @@ export default function VapiCampaignDashboard() {
   const [countryCode, setCountryCode] = useState("+1");
   const [phoneDigits, setPhoneDigits] = useState("");
   const [contactNameInput, setContactNameInput] = useState("");
+  const [loadingCampaignId, setLoadingCampaignId] = useState(null);
 
   // Refs
   const timerRef = useRef(null);
@@ -1070,33 +1071,42 @@ export default function VapiCampaignDashboard() {
   };
 
   const loadCampaign = async (meta) => {
+    if (loadingCampaignId) return;
     if (!supabaseClientRef.current) { alert("No database configured — add Supabase credentials in ⚙ CONFIG → DATABASE."); return; }
-    const { data, error } = await supabaseClientRef.current
-      .from("calls")
-      .select("*")
-      .eq("campaign_id", meta.id)
-      .order("created_at", { ascending: true });
-    if (error || !data) { alert("Failed to load campaign."); return; }
+    setLoadingCampaignId(meta.id);
+    try {
+      const { data, error } = await supabaseClientRef.current
+        .from("calls")
+        .select("*")
+        .eq("campaign_id", meta.id)
+        .order("created_at", { ascending: true });
+      if (error) { alert(`Failed to load campaign: ${error.message}`); return; }
+      if (!data) { alert("Failed to load campaign: no data returned."); return; }
 
-    const loaded = data.map((row, i) => ({
-      id: Date.now() + i,
-      phone: row.phone,
-      name: row.contact_name || "",
-      status: row.status,
-      supabaseId: row.id,
-      result: !["pending", "calling"].includes(row.status) ? mapRowToResult(row) : null,
-    }));
+      const loaded = data.map((row, i) => ({
+        id: Date.now() + i,
+        phone: row.phone,
+        name: row.contact_name || "",
+        status: row.status,
+        supabaseId: row.id,
+        result: !["pending", "calling"].includes(row.status) ? mapRowToResult(row) : null,
+      }));
 
-    setContacts(loaded);
-    contactsRef.current = loaded;
-    setCampaignId(meta.id);
-    setCampaignName(meta.name || "");
-    setBusinessName(meta.businessName || "");
-    const allDone = loaded.every((c) => !["pending", "calling"].includes(c.status));
-    setCampaignState(allDone ? CAMPAIGN_STATES.COMPLETE : CAMPAIGN_STATES.IDLE);
-    campaignRef.current = allDone ? CAMPAIGN_STATES.COMPLETE : CAMPAIGN_STATES.IDLE;
-    setTab("results");
-    setupRealtime(meta.id);
+      setContacts(loaded);
+      contactsRef.current = loaded;
+      setCampaignId(meta.id);
+      setCampaignName(meta.name || "");
+      setBusinessName(meta.businessName || "");
+      const allDone = loaded.every((c) => !["pending", "calling"].includes(c.status));
+      setCampaignState(allDone ? CAMPAIGN_STATES.COMPLETE : CAMPAIGN_STATES.IDLE);
+      campaignRef.current = allDone ? CAMPAIGN_STATES.COMPLETE : CAMPAIGN_STATES.IDLE;
+      setTab("results");
+      setupRealtime(meta.id);
+    } catch (err) {
+      alert(`Error loading campaign: ${err?.message || String(err)}`);
+    } finally {
+      setLoadingCampaignId(null);
+    }
   };
 
   const expandContact = async (contactId) => {
@@ -2547,39 +2557,43 @@ export default function VapiCampaignDashboard() {
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {history.map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => loadCampaign(c)}
-                        style={{
-                          background: "#0f1124",
-                          border: "1px solid #1e2140",
-                          borderRadius: 12,
-                          padding: "16px 20px",
-                          cursor: "pointer",
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          transition: "border-color 0.15s",
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.borderColor = "rgba(78,205,196,0.4)"}
-                        onMouseLeave={(e) => e.currentTarget.style.borderColor = "#1e2140"}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 700, color: "#e0e4f0", fontSize: 14, marginBottom: 4 }}>
-                            {c.name}
+                    {history.map((c) => {
+                      const isLoading = loadingCampaignId === c.id;
+                      return (
+                        <div
+                          key={c.id}
+                          onClick={() => loadCampaign(c)}
+                          style={{
+                            background: "#0f1124",
+                            border: `1px solid ${isLoading ? "rgba(78,205,196,0.6)" : "#1e2140"}`,
+                            borderRadius: 12,
+                            padding: "16px 20px",
+                            cursor: loadingCampaignId ? "default" : "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            transition: "border-color 0.15s",
+                            opacity: loadingCampaignId && !isLoading ? 0.5 : 1,
+                          }}
+                          onMouseEnter={(e) => { if (!loadingCampaignId) e.currentTarget.style.borderColor = "rgba(78,205,196,0.4)"; }}
+                          onMouseLeave={(e) => { if (!loadingCampaignId) e.currentTarget.style.borderColor = "#1e2140"; }}
+                        >
+                          <div>
+                            <div style={{ fontWeight: 700, color: "#e0e4f0", fontSize: 14, marginBottom: 4 }}>
+                              {c.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#6b7094", fontFamily: "'JetBrains Mono', monospace" }}>
+                              {new Date(c.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                              {c.businessName ? ` · ${c.businessName}` : ""}
+                              {" · "}{c.contactCount} contacts
+                            </div>
                           </div>
-                          <div style={{ fontSize: 11, color: "#6b7094", fontFamily: "'JetBrains Mono', monospace" }}>
-                            {new Date(c.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                            {c.businessName ? ` · ${c.businessName}` : ""}
-                            {" · "}{c.contactCount} contacts
+                          <div style={{ fontSize: 11, color: "#4ecdc4", fontFamily: "'JetBrains Mono', monospace" }}>
+                            {isLoading ? "Loading…" : "Load →"}
                           </div>
                         </div>
-                        <div style={{ fontSize: 11, color: "#4ecdc4", fontFamily: "'JetBrains Mono', monospace" }}>
-                          Load →
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
