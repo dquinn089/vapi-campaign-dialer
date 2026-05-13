@@ -1151,13 +1151,13 @@ export default function VapiCampaignDashboard() {
     } else if (format === "txt") {
       const txt = [headers.join("\t"), ...rows.map((r) => headers.map((h) => String(r[h] ?? "").replace(/\t/g, " ")).join("\t"))].join("\n");
       triggerDownload(`${filename}.txt`, txt, "text/plain;charset=utf-8;");
-    } else if (format === "xlsx") {
+    } else if (format === "xlsx" || format === "ods") {
       const xlsxMod = await import("xlsx");
       const XLSX = xlsxMod.default ?? xlsxMod;
       const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Results");
-      XLSX.writeFile(wb, `${filename}.xlsx`);
+      XLSX.writeFile(wb, `${filename}.${format}`);
     }
   };
 
@@ -2232,6 +2232,7 @@ export default function VapiCampaignDashboard() {
                         {[
                           { label: "CSV  (.csv)", format: "csv" },
                           { label: "Excel  (.xlsx)", format: "xlsx" },
+                          { label: "LibreOffice Calc  (.ods)", format: "ods" },
                           { label: "Text  (.txt)", format: "txt" },
                         ].map(({ label, format }) => (
                           <button
