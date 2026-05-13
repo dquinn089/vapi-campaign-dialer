@@ -1070,7 +1070,8 @@ export default function VapiCampaignDashboard() {
   };
 
   const loadCampaign = async (meta) => {
-    const { data, error } = await supabase
+    if (!supabaseClientRef.current) { alert("No database configured — add Supabase credentials in ⚙ CONFIG → DATABASE."); return; }
+    const { data, error } = await supabaseClientRef.current
       .from("calls")
       .select("*")
       .eq("campaign_id", meta.id)
