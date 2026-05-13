@@ -8,18 +8,21 @@ Upload a contact list, configure your AI assistant, and launch fully automated o
 
 ## What Is This?
 
-VAPI Campaign Dialer lets you run outbound AI phone call campaigns at scale. You provide a list of contacts (CSV, Excel, or TXT), and the dashboard dials each one using VAPI's AI voice assistant. As calls complete, outcomes are updated in real time: answered, voicemail, scheduled, declined, no answer, or failed.
+VAPI Campaign Dialer lets you run outbound AI phone call campaigns. You provide a list of contacts (CSV, Excel, or TXT), and the dashboard dials each one using a VAPI AI voice assistant. As calls complete, outcomes update in real time: answered, voicemail, declined, no answer, or failed.
+
+This is a **base template** — the AI assistant's purpose and script are fully customizable. Drop in your own VAPI system prompt for any outbound use case (lead qualification, outreach, reminders, surveys, etc.).
 
 **Key features:**
-- Upload contacts via CSV, Excel (.xlsx/.xls), TXT, or TSV
-- Map columns (name, phone, company, etc.) to contact fields
-- Configurable concurrency (calls at once) and delay between calls
+- Upload contacts via CSV, Excel (.xlsx / .xls), or TXT
+- Map columns (phone, name) during import
+- Configurable delay between calls
 - Pause / resume campaigns mid-run
-- Live call status feed with per-contact transcripts
-- Appointment scheduling via VAPI tool calls
-- Stats bar: answered, voicemail, scheduled, no-answer, declined, failed
-- DEMO mode — runs a full simulated campaign with no external services required
-- LIVE mode — real VAPI calls, real-time Supabase updates
+- Live call status feed with per-contact transcripts, summaries, and recordings
+- Stats: answered, voicemail, declined / no answer / failed
+- Export results to CSV, Excel (.xlsx), LibreOffice Calc (.ods), or Text (.txt)
+- Campaign history — reload any past campaign's results from the History tab
+- DEMO mode — full simulated campaign with no external services required
+- LIVE mode — real VAPI calls with real-time Supabase updates
 
 ---
 
@@ -41,9 +44,9 @@ VAPI Campaign Dialer lets you run outbound AI phone call campaigns at scale. You
                                  └──────────────────┘
 ```
 
-1. You import contacts and click **Start Campaign**
+1. You import contacts and click **Launch Campaign**
 2. The dashboard inserts each contact into Supabase and fires a VAPI outbound call via the REST API
-3. During the call, VAPI sends tool-call webhooks to the Supabase Edge Function (e.g., `schedule_appointment`, `mark_declined`, `update_status`)
+3. During and after the call, VAPI sends webhooks to the Supabase Edge Function (`mark_declined`, `mark_call`, `end-of-call-report`, etc.)
 4. The Edge Function writes outcomes back to Supabase
 5. Supabase Realtime pushes the update to the dashboard instantly
 
@@ -51,11 +54,9 @@ VAPI Campaign Dialer lets you run outbound AI phone call campaigns at scale. You
 
 ## Prerequisites
 
-Before you begin you will need accounts and credentials from three services:
-
 | Service | What you need | Where to get it |
 |---------|--------------|-----------------|
-| **Supabase** | Project URL, Publishable (anon) key, Service Role key | [supabase.com](https://supabase.com) → your project → Settings → API |
+| **Supabase** | Project URL, Anon (publishable) key, Service Role key | [supabase.com](https://supabase.com) → your project → Settings → API |
 | **VAPI** | API Key, Assistant ID, Phone Number ID | [vapi.ai](https://vapi.ai) → dashboard |
 | **Node.js** | v18 or later | [nodejs.org](https://nodejs.org) |
 | **Supabase CLI** | For deploying the Edge Function | `npm i -g supabase` |
@@ -72,48 +73,62 @@ cd vapi-campaign-dialer
 npm install
 ```
 
-### Step 2 — Configure environment variables
+### Step 2 — Configure credentials
 
-Copy the example env file and fill in your credentials:
+You have two options — pick one:
 
-```bash
-cp .env.example .env
-```
+#### Option A: Dashboard UI (no `.env` required)
 
-Open `.env` and fill in:
+Leave the `.env` file blank and enter everything through the dashboard after running `npm run dev`. Open ⚙ **CONFIG** and fill in:
+
+- **VAPI tab** — API Key, Assistant ID, Phone Number ID
+- **Database tab** — Supabase Project URL and Anon Key
+
+Credentials are saved to `localStorage` and persist across page reloads. Nothing is committed to the repo.
+
+#### Option B: `.env` file (pre-fills the dashboard on first load)
 
 ```env
+# Supabase
 VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=<your-supabase-anon-key>
 
+# VAPI
 VITE_VAPI_API_KEY=<your-vapi-api-key>
 VITE_VAPI_ASSISTANT_ID=<your-vapi-assistant-id>
 VITE_VAPI_PHONE_NUMBER_ID=<your-vapi-phone-number-id>
 ```
 
-> `.env` is git-ignored and will never be committed.
+> `.env` is git-ignored and will never be committed. The dashboard UI always takes precedence over `.env` values once credentials have been saved once.
 
 ### Step 3 — Create the Supabase database schema
 
-In the Supabase dashboard go to **SQL Editor** and run the following:
+In the Supabase dashboard go to **SQL Editor** and run:
 
 ```sql
 CREATE TABLE IF NOT EXISTS calls (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  campaign_id       TEXT NOT NULL,
-  vapi_call_id      TEXT,
-  contact_name      TEXT,
-  contact_phone     TEXT NOT NULL,
-  contact_company   TEXT,
-  status            TEXT NOT NULL DEFAULT 'pending',
-  transcript        TEXT,
-  notes             TEXT,
-  scheduled_date    TEXT,
-  scheduled_time    TEXT,
-  duration          INTEGER,
-  scheduled_at      TIMESTAMPTZ,
-  created_at        TIMESTAMPTZ DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ DEFAULT NOW()
+  id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id        TEXT,
+  business_name      TEXT NOT NULL,
+  phone              TEXT NOT NULL,
+  contact_name       TEXT,
+  status             TEXT DEFAULT 'pending',
+  vapi_call_id       TEXT UNIQUE,
+  transcript         TEXT,
+  duration_sec       INTEGER DEFAULT 0,
+  end_reason         TEXT,
+  summary            TEXT,
+  sentiment          TEXT,
+  recording_url      TEXT,
+  scheduled_date     TEXT,
+  scheduled_time     TEXT,
+  decline_reason     TEXT,
+  callback_requested BOOLEAN DEFAULT false,
+  notes              TEXT,
+  called_at          TIMESTAMPTZ,
+  scheduled_at       TIMESTAMPTZ,
+  created_at         TIMESTAMPTZ DEFAULT now(),
+  updated_at         TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS calls_campaign_id_idx ON calls (campaign_id);
@@ -129,18 +144,17 @@ In the Supabase dashboard:
 ### Step 5 — Create your VAPI assistant
 
 In the VAPI dashboard:
-1. Create a new **Assistant** and write a system prompt for your use case
+1. Create a new **Assistant** and write a system prompt for your use case (see [System Prompt](#system-prompt) below)
 2. Add a **Phone Number** (outbound)
-3. Add the following three **tools** to the assistant, all pointing to your Edge Function URL:
+3. Add the following tools to the assistant, all pointing to your Edge Function URL:
    `https://<your-project-ref>.supabase.co/functions/v1/vapi-webhook`
 
-   | Tool name | Description |
-   |-----------|-------------|
-   | `schedule_appointment` | Called when contact agrees to a meeting. Args: `contact_name`, `scheduled_date` (YYYY-MM-DD), `scheduled_time`, `notes` |
-   | `mark_declined` | Called when contact explicitly declines. Args: `reason` |
-   | `update_status` | Called to set the final call status. Args: `status` (answered/voicemail/no_answer/failed), `notes` |
+   | Tool name | When to call | Arguments |
+   |-----------|-------------|-----------|
+   | `mark_declined` | Contact explicitly declines or says do not call | `reason` (string) |
+   | `mark_call` | Contact wants a callback or the call ends with a note | `notes` (string) |
 
-4. Copy the **Assistant ID** and **Phone Number ID** into your `.env`
+4. Copy the **Assistant ID** and **Phone Number ID** into the dashboard (or `.env`)
 
 ### Step 6 — Deploy the Supabase Edge Function
 
@@ -154,7 +168,7 @@ supabase functions deploy vapi-webhook --no-verify-jwt
 The function URL will be:
 `https://<your-project-ref>.supabase.co/functions/v1/vapi-webhook`
 
-### Step 7 — Run the dashboard locally
+### Step 7 — Run the dashboard
 
 ```bash
 npm run dev
@@ -164,42 +178,56 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
+## System Prompt
+
+This is a base template — the assistant's personality, purpose, and script are yours to define. The only structural requirements are that the assistant knows when to call `mark_declined` and `mark_call`, and that it uses `end_call` to hang up cleanly.
+
+A starter prompt is included in the repo. Key guidance to include in any prompt:
+
+- **Call `mark_declined`** when the contact says no or asks to stop being called
+- **Call `mark_call`** when the contact wants a follow-up or you need to log notes
+- **Call `end_call` immediately after saying goodbye** — do not wait for a response
+
+---
+
 ## Using the Dashboard
 
 ### DEMO mode vs LIVE mode
 
-- **DEMO** (default) — runs a simulated campaign with fake call outcomes. No VAPI credentials needed. Great for testing the UI.
-- **LIVE** — activated automatically when all three VAPI credentials are present in the settings panel (or in `.env`). Makes real outbound calls.
+- **DEMO** (default) — simulated campaign with fake call outcomes. No credentials needed. Great for exploring the UI.
+- **LIVE** — activated automatically once all three VAPI credentials are present (via dashboard config or `.env`). Makes real outbound calls.
 
-The mode badge in the top-right corner shows `● LIVE` or `◌ DEMO`.
+The mode badge in the header shows `● LIVE` or `◌ DEMO`.
 
 ### Importing contacts
 
-1. Click **Import Contacts**
-2. Drag-and-drop or select a file: CSV, Excel (.xlsx/.xls), TXT, or TSV
-3. Map the columns to fields: **Phone** (required), Name, Company, Email
-4. Preview the contacts and click **Import**
-
-Minimum required: a **Phone** column. Everything else is optional.
+1. Click **Import File** in Campaign Setup
+2. Drag-and-drop or select a file: CSV, Excel (.xlsx / .xls), or TXT
+3. Map the **Phone** column (required) and optionally the **Name** column
+4. Preview and confirm
 
 ### Running a campaign
 
-1. Enter a **Business Name** (used in the AI's greeting)
-2. Open **VAPI Settings** and paste your API Key, Assistant ID, and Phone Number ID (if not already in `.env`)
-3. Set **Concurrent Calls** (how many calls run simultaneously)
-4. Set **Delay Between Calls** (seconds between dialing each contact)
-5. Click **Start Campaign**
-6. Use **Pause** / **Resume** to hold/continue mid-campaign
+1. Enter a **Campaign Name** and **Business Name**
+2. Add contacts manually or via import
+3. Click **Launch Campaign**
+4. Use **Pause** / **Resume** to hold or continue mid-campaign
+5. The **Results** tab updates in real time as calls complete
 
-### Reading results
+### Exporting results
 
-Each contact card shows:
-- Status badge (Calling, Answered, Voicemail, Scheduled, Declined, No Answer, Failed)
-- Duration
-- Appointment time (if scheduled)
-- Expandable transcript
+Once any call has a result, an **↓ Export Results** button appears above the results table. Choose from:
 
-The stats bar at the top tracks totals per outcome in real time.
+- **CSV** — universal, opens in any spreadsheet app
+- **Excel (.xlsx)** — Microsoft Excel
+- **LibreOffice Calc (.ods)** — open format
+- **Text (.txt)** — tab-separated, plain text
+
+The export includes: contact name, phone, status, duration, called at, summary, transcript, sentiment, end reason, callback requested, decline reason, and notes.
+
+### Campaign history
+
+The **History** tab lists every campaign that has been launched. Click any entry to reload its contacts and results into the Results tab.
 
 ---
 
@@ -210,14 +238,14 @@ vapi-campaign-dialer/
 ├── src/
 │   ├── main.jsx                    # React entry point
 │   ├── App.jsx                     # Root app component
-│   ├── VapiCampaignDashboard.jsx   # Main dashboard (2300+ lines)
+│   ├── VapiCampaignDashboard.jsx   # Main dashboard
 │   └── lib/
-│       └── supabase.js             # Supabase client
+│       └── supabase.js             # Static Supabase client (env-var fallback)
 ├── supabase/
 │   └── functions/
 │       └── vapi-webhook/
 │           └── index.ts            # Edge Function (Deno)
-├── .env.example                    # Credentials template
+├── .env.example                    # Credentials template (optional)
 ├── index.html
 ├── vite.config.js
 └── package.json
@@ -227,20 +255,22 @@ vapi-campaign-dialer/
 
 ## Deploying to GitHub Pages
 
-This repo includes a GitHub Actions workflow that automatically builds and deploys the dashboard to GitHub Pages on every push to `main`.
+This repo includes a GitHub Actions workflow that builds and deploys to GitHub Pages on every push to `main`.
 
 **One-time setup:**
 
-1. Go to your repo on GitHub → **Settings → Secrets and variables → Actions**
-2. Add the following repository secrets:
+1. Go to your repo → **Settings → Secrets and variables → Actions**
+2. Add the following secrets (optional — users can enter credentials via the dashboard UI instead):
 
    | Secret name | Value |
    |-------------|-------|
    | `VITE_SUPABASE_URL` | Your Supabase project URL |
-   | `VITE_SUPABASE_PUBLISHABLE_KEY` | Your Supabase anon/publishable key |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | Your Supabase anon key |
    | `VITE_VAPI_API_KEY` | Your VAPI API key |
    | `VITE_VAPI_ASSISTANT_ID` | Your VAPI assistant ID |
    | `VITE_VAPI_PHONE_NUMBER_ID` | Your VAPI phone number ID |
+
+   > If you skip the secrets, the deployed app starts with empty credentials and users configure everything through the dashboard UI.
 
 3. Go to **Settings → Pages** and set **Source** to `GitHub Actions`
 
@@ -255,7 +285,7 @@ After pushing to `main`, the dashboard will be live at:
 - **Supabase** — PostgreSQL database, Realtime subscriptions, Edge Functions (Deno)
 - **VAPI** — AI voice calls, tool calls, webhooks
 - **PapaParse** — CSV parsing
-- **SheetJS (xlsx)** — Excel file parsing
+- **SheetJS (xlsx)** — Excel / ODS file import and export
 
 ---
 
