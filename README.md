@@ -158,6 +158,8 @@ In the VAPI dashboard:
 
 ### Step 6 — Deploy the Supabase Edge Function
 
+These commands are run in your **Terminal** (Mac/Linux) or **Command Prompt / PowerShell** (Windows), from inside the project folder. Make sure you have the Supabase CLI installed (`npm i -g supabase`) before running them.
+
 ```bash
 supabase login
 supabase link --project-ref <your-project-ref>
@@ -165,8 +167,15 @@ supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 supabase functions deploy vapi-webhook --no-verify-jwt
 ```
 
-The function URL will be:
+- `supabase login` — opens a browser to authenticate with your Supabase account
+- `supabase link` — connects this project folder to your Supabase project. Your project ref is the string in your Supabase project URL: `https://supabase.com/dashboard/project/<your-project-ref>`
+- `supabase secrets set` — uploads your Service Role key to the Edge Function as a secret (never hardcoded)
+- `supabase functions deploy` — uploads the `supabase/functions/vapi-webhook/index.ts` file to Supabase and makes it live
+
+Once deployed, the function URL will be:
 `https://<your-project-ref>.supabase.co/functions/v1/vapi-webhook`
+
+Use this URL when adding the tools to your VAPI assistant in Step 5.
 
 ### Step 7 — Run the dashboard
 
